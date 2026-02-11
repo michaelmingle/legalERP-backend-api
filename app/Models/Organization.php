@@ -6,5 +6,22 @@ use Illuminate\Database\Eloquent\Model;
 
 class Organization extends Model
 {
-    //
+    protected $fillable = [
+        'name',
+        'address',
+        'phone',
+        'organisation_email',
+        'website',
+        'team',
+        'goals',
+    ];
+
+    protected $casts = [
+        'goals' => 'array',   // 👈 auto-encode/decode JSON
+    ];  
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
 }
