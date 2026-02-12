@@ -25,7 +25,12 @@ Route::get('/invite/accept/{token}', [TeamInviteController::class, 'accept']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/user', [AuthController::class, 'user']);
+    // Route::get('/user', [AuthController::class, 'user']);
+    Route::get('/users', [AuthController::class, 'index']);
+    Route::post('/users', [AuthController::class, 'store']);
+    Route::get('/users/{user}', [AuthController::class, 'show']);
+    Route::put('/users/{user}', [AuthController::class, 'update']);
+    Route::delete('/users/{user}', [AuthController::class, 'destroy']);
 
     Route::prefix('organization')->group(function () {
         Route::put('/goals', [OrganizationController::class, 'updateGoals']);

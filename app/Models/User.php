@@ -47,6 +47,8 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected $appends = ['is_online'];
+
     /**
      * Get the attributes that should be cast.
      *
@@ -57,11 +59,29 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'last_login_at' => 'datetime',    
+            'last_activity_at' => 'datetime',
         ];
     }
 
     public function organization()
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function isOnline(): bool
+    {
+        return $this->last_activity_at && $this->last_activity_at->gt(now()->subMinutes(5));
+    }
+
+    // public function getIsOnlineAttribute(): bool
+    // {
+    //     return $this->isOnline();
+    // }
+
+    public function getIsOnlineAttribute(): bool
+    {
+        return $this->last_activity_at 
+            && $this->last_activity_at->gt(now()->subMinutes(5));
     }
 }

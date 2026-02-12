@@ -20,13 +20,18 @@ return Application::configure(basePath: dirname(__DIR__))
         }
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+        'track.activity' => \App\Http\Middleware\TrackUserActivity::class,
+        ]);
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);
         $middleware->group('api', [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
-            'throttle:api',   // 👈 now this works
+            'throttle:api', 
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            'track.activity', 
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

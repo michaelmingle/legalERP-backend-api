@@ -9,10 +9,16 @@ use App\Models\TeamInvite;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function index(Request $request)
+    {
+        $users = User::with('organization')->get();
+        return response()->json($users);
+    }
     // Register
     public function register(Request $request)
     {
@@ -105,21 +111,107 @@ class AuthController extends Controller
             ]);
         }
 
+        $user->update([
+            'last_login_at' => now(),
+            'last_activity_at' => now(),
+        ]);
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-        'access_token' => $token,
-        'token_type'   => 'Bearer',
-        'user'         => [
-            'id'                   => $user->id,
-            'first_name'           => $user->first_name,
-            'last_name'            => $user->last_name,
-            'email'                => $user->email,
-            'organization_id'      => $user->organization_id,
-            'role'                 => $user->role,
-            'onboarding_completed' => $user->onboarding_completed, // 👈 include
-        ],
-    ]);
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'user' => $user,
+            'organization' => $user->organization, // include organization details
+        ]);
+    }
+
+    // store new user (admin only)
+    public function store(Request $request)
+    {
+        $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name'  => 'required|string|max:255',
+            'email'      => 'required|string|email|max:255|unique:users',
+            'password'   => 'required|string|min:8|confirmed',
+            'role'       => 'required|in:admin,lawyer,paralegal,staff,client,hr,owner',
+            'photo_url'     => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // 2MB max
+        ]);
+
+        // Handle avatar upload
+        $photoUrl = null;
+        if ($request->hasFile('photo_url')) {
+            $path = $request->file('photo_url')->store('avatars', 'public');
+            $photoUrl = asset('storage/' . $path);
+        }
+
+        $user = User::create([
+            'organization_id' => $request->user()->organization_id, // from authenticated user
+            'first_name'      => $request->first_name,
+            'last_name'       => $request->last_name,
+            'email'           => $request->email,
+            'password'        => Hash::make($request->password),
+            'address'         => $request->address,
+            'role'            => $request->role,
+            'status'          => 'active', // default status
+            'photo_url'       => $photoUrl, // 👈 save the URL
+        ]);
+
+        // Load relationship if needed
+        $user->load('organization');
+
+        return response()->json($user, 201);
+    }
+
+    // update user (admin only)
+    public function update(Request $request, User $user)
+    {
+        // Ensure user belongs to same org
+        if ($user->organization_id !== $request->user()->organization_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'first_name' => 'sometimes|required|string|max:255',
+            'last_name'  => 'sometimes|required|string|max:255',
+            'email'      => 'sometimes|required|string|email|max:255|unique:users,email,' . $user->id,
+            'role'       => 'sometimes|required|in:admin,lawyer,paralegal,staff,client,hr,owner',
+            'status'     => 'sometimes|required|in:active,inactive,suspended,invited',
+            'phone'      => 'nullable|string|max:20',
+            'address'    => 'nullable|string|max:255',
+            'avatar'     => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        // Handle avatar upload
+        if ($request->hasFile('avatar')) {
+            // Delete old avatar if exists
+            if ($user->photo_url) {
+                $oldPath = str_replace(asset('storage/'), '', $user->photo_url);
+                Storage::disk('public')->delete($oldPath);
+            }
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $photoUrl = asset('storage/' . $path);
+        }
+
+        $user->update([
+            'first_name' => $request->first_name ?? $user->first_name,
+            'last_name'  => $request->last_name ?? $user->last_name,
+            'email'      => $request->email ?? $user->email,
+            'role'       => $request->role ?? $user->role,
+            'status'     => $request->status ?? $user->status,
+            'phone'      => $request->phone ?? $user->phone,
+            'address'    => $request->address ?? $user->address,
+            'photo_url'  => $photoUrl ?? $user->photo_url,
+        ]);
+
+        return response()->json($user);
+    }
+
+    // delete user (admin only)
+    public function destroy(Request $request, User $user)
+    {
+        $user->delete();
+        return response()->json(['message' => 'User deleted']);
     }
 
     // Logout
