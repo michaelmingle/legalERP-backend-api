@@ -4,6 +4,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\TeamInviteController;
 use App\Http\Controllers\Api\V1\OrganizationController;
+use App\Http\Controllers\Api\V1\CaseController;
+use App\Http\Controllers\Api\V1\ClientController;
+use App\Http\Controllers\Api\V1\DocumentController;
 
 Route::get('/test', function () {
     return response()->json(['message' => 'API is working']);
@@ -37,4 +40,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/invites', [OrganizationController::class, 'sendInvite']);
         Route::delete('/invites/{invite}', [OrganizationController::class, 'revokeInvite']);
     });
+
+    // cases
+    Route::apiResource('cases', CaseController::class);
+
+    // Route::apiResource('case-types', CaseTypeController::class);
+    Route::apiResource('clients', ClientController::class);
+
+    Route::apiResource('documents', DocumentController::class);
 });

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\Document;
 
 class DocumentController extends Controller
 {
@@ -13,6 +14,8 @@ class DocumentController extends Controller
     public function index()
     {
         //
+        $documents = Document::all();
+        return response()->json($documents);
     }
 
     /**
@@ -20,7 +23,19 @@ class DocumentController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'file_path' => 'required|string|max:255',
+            'organization_id' => 'required|exists:organizations,id',
+            'uploaded_by' => 'required|exists:users,id',
+            'case_id' => 'nullable|exists:cases,id',
+            'description' => 'nullable|string',
+            'original_filename' => 'required|string|max:255',
+            'mime_type' => 'required|string|max:255',
+            'confidentiality' => 'required|in:public,confidential,highly_confidential',
+        ]);
+
+        $document = Document::create($validated);
+        return response()->json($document, 201);
     }
 
     /**
