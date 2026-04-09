@@ -126,6 +126,12 @@ class AuthController extends Controller
         ]);
     }
 
+    public function getOnlineStatus($id)
+{
+    $user = User::find($id);
+    return response()->json(['is_online' => $user ? $user->is_online : false]);
+}
+
     // store new user (admin only)
     public function store(Request $request)
     {

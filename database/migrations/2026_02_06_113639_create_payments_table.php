@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('bank_name')->nullable();
             $table->decimal('amount', 12, 2);
             $table->string('currency', 3)->default('GHS');
-            $table->enum('method', ['cash', 'check', 'credit_card', 'debit_card', 'bank_transfer', 'online', 'other'])->default('bank_transfer');
+            $table->enum('method', ['cash', 'check', 'credit_card', 'debit_card', 'bank_transfer', 'online', 'other'])->default('cash');
             $table->enum('status', ['paid', 'partial_payment']);
             $table->date('payment_date');
             $table->string('reference_number')->nullable();

@@ -29,6 +29,15 @@ class Cases extends Model
         'deposit',
     ];
 
+    protected $with = [
+        'organization',
+        'client',
+        'assignedUser',
+        // 'supervisor',
+        // 'document',
+        'timeTrackings'
+    ];
+
     public function organization()
     {
         return $this->belongsTo(Organization::class);
@@ -56,6 +65,11 @@ class Cases extends Model
 
     public function document()
     {
-        return $this->belongsTo(Document::class);
+        return $this->belongsTo(Document::class, 'document');
     }
+
+    public function timeTrackings()
+{
+    return $this->hasMany(TimeTracking::class, 'case_id');
+}
 }

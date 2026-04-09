@@ -31,4 +31,9 @@ class Document extends Model
     {
         return $this->belongsTo(Organization::class);
     }
+
+    // public function cases()
+    // {
+    //     return $this->hasMany(Cases::class);
+    // }
 }

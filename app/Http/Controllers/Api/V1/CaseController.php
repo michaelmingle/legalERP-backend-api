@@ -18,6 +18,7 @@ class CaseController extends Controller
     {
         //
         $cases = Cases::all();
+        $cases->load('client:id,full_name', 'assignedUser:id,first_name,last_name', 'supervisor:id,first_name,last_name', 'organization:id,name', 'caseType:id,name');
         return response()->json($cases);
     }
 
@@ -111,6 +112,21 @@ class CaseController extends Controller
         //
         $case = Cases::findOrFail($id);
         return response()->json($case);
+    }
+
+    public function lawyerCases()
+    {
+        $lawyerCase = Cases::where('assigned_to', Auth::user()->id)->get();
+        return response()->json($lawyerCase);
+    }
+
+    // Client cases
+    public function clientCases()
+    {
+        $clientCases = Cases::where('client_id', Auth::user()->id)->get();
+
+        // dd($clientCases);
+        return response()->json($clientCases);
     }
 
     /**

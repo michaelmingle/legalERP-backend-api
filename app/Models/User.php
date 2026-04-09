@@ -84,4 +84,14 @@ class User extends Authenticatable
         return $this->last_activity_at 
             && $this->last_activity_at->gt(now()->subMinutes(5));
     }
+
+    public function employee()
+    {
+        return $this->hasOne(Employee::class);
+    }
+
+    public function client()
+{
+    return $this->hasOne(Client::class);
+}
 }

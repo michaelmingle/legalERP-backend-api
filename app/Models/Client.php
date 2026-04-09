@@ -7,8 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 class Client extends Model
 {
     protected $fillable = [
+        'user_id',
         'organization_id',
         'full_name',
+        'client_number',
         'email',
         'phone',
         'mobile',
@@ -16,6 +18,8 @@ class Client extends Model
         'gender',
         'date_of_birth',
         'job_title',
+        'tags',
+        'start_date',
         'status',
         'address',
         'assigned_lawyer',
@@ -31,5 +35,20 @@ class Client extends Model
     {
         return $this->hasMany(Cases::class);
     }
-    
+
+    public function documents()
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    // Assigned laywer relationship
+    public function assignedLawyer()
+    {
+        return $this->belongsTo(User::class, 'assigned_lawyer');
+    }
+
+    public function user()
+{
+    return $this->belongsTo(User::class);
+}
 }
