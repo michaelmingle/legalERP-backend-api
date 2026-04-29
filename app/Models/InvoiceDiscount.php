@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
 
 class InvoiceDiscount extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'invoice_id',
         'name',

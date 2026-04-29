@@ -5,12 +5,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Conversation extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsActivity, SoftDeletes;
 
-    protected $fillable = ['client_id', 'lawyer_id'];
+    protected $fillable = ['client_id', 'lawyer_id', 'organization_id'];
+
+
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
 
     public function messages()
     {
@@ -35,5 +44,13 @@ class Conversation extends Model
     public function getOtherParticipantAttribute($userId)
     {
         return $this->client_id === $userId ? $this->lawyer : $this->client;
+    }
+
+    public function unreadMessagesForUser($userId)
+    {
+        return $this->messages()
+            ->where('sender_id', '!=', $userId)
+            ->whereNull('read_at')
+            ->count();
     }
 }

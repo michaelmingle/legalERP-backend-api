@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Traits\LogsActivity;
 
 class Employee extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, LogsActivity;
 
     protected $fillable = [
+        'organization_id',
         'user_id',
         'full_name',
         'date_of_birth',
@@ -39,13 +41,18 @@ class Employee extends Model
         'salary' => 'decimal:2',
     ];
 
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
     public function getPhotoUrlAttribute()
-{
-    return $this->photo ? asset('storage/' . $this->photo) : null;
-}
+    {
+        return $this->photo ? asset('storage/' . $this->photo) : null;
+    }
 }

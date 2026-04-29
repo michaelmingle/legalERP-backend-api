@@ -5,20 +5,27 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Cases;
+use App\Models\Client;
+use App\Models\User;
 use App\Models\Document;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CaseController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * Display a listing of the resource (filtered by organization)
      */
     public function index()
     {
-        //
-        $cases = Cases::all();
-        $cases->load('client:id,full_name', 'assignedUser:id,first_name,last_name', 'supervisor:id,first_name,last_name', 'organization:id,name', 'caseType:id,name');
+        $user = Auth::user();
+        $organizationId = $user->organization_id;
+        
+        $cases = Cases::where('organization_id', $organizationId)
+            ->with(['client', 'assignedUser', 'supervisor', 'caseType'])
+            ->get();
+        
         return response()->json($cases);
     }
 
@@ -27,10 +34,11 @@ class CaseController extends Controller
      */
     public function store(Request $request)
     {
+        $user = Auth::user();
+        $organizationId = $user->organization_id;
+        
         $validated = $request->validate([
             'case_number' => 'required|string|unique:cases',
-            'organization_id' => 'required|exists:organizations,id',
-            // 'case_type_id' => 'required|exists:case_types,id',
             'case_type' => 'required|string|max:255',
             'client_id' => 'required|exists:clients,id',
             'case_name' => 'required|string|max:255',
@@ -53,26 +61,55 @@ class CaseController extends Controller
         DB::beginTransaction();
 
         try {
+            // Verify client belongs to organization
+            $client = Client::where('id', $validated['client_id'])
+                ->where('organization_id', $organizationId)
+                ->first();
+                
+            if (!$client) {
+                return response()->json(['error' => 'Client not found in your organization'], 404);
+            }
+            
+            // Verify assigned_to user belongs to organization
+            if (!empty($validated['assigned_to'])) {
+                $assignedUser = User::where('id', $validated['assigned_to'])
+                    ->where('organization_id', $organizationId)
+                    ->first();
+                    
+                if (!$assignedUser) {
+                    return response()->json(['error' => 'Assigned user not found in your organization'], 404);
+                }
+            }
+            
+            // Verify supervisor belongs to organization
+            $supervisor = User::where('id', $validated['supervisor'])
+                ->where('organization_id', $organizationId)
+                ->first();
+                
+            if (!$supervisor) {
+                return response()->json(['error' => 'Supervisor not found in your organization'], 404);
+            }
 
             $documentId = null;
 
             // Handle file upload
             if ($request->hasFile('document')) {
-
                 $file = $request->file('document');
                 $path = $file->store('documents', 'public');
 
                 $document = Document::create([
                     'file_path' => $path,
                     'uploaded_by' => Auth::id(),
-                    'organization_id' => $validated['organization_id'],
-                    // 'mime_type' => $file->getClientMimeType(),
+                    'organization_id' => $organizationId,
                     'confidentiality' => $validated['confidentiality'],
                 ]);
 
                 $documentId = $document->id;
             }
 
+            // Add organization_id to validated data
+            $validated['organization_id'] = $organizationId;
+            
             // Attach document ID if exists
             if ($documentId) {
                 $validated['document'] = $documentId;
@@ -93,9 +130,8 @@ class CaseController extends Controller
                 'data' => $case
             ], 201);
         } catch (\Exception $e) {
-
             DB::rollBack();
-
+            Log::error('Case creation failed: ' . $e->getMessage());
             return response()->json([
                 'message' => 'Failed to create case',
                 'error' => $e->getMessage()
@@ -103,42 +139,108 @@ class CaseController extends Controller
         }
     }
 
+    public function getAssignableUsers()
+    {
+        $user = Auth::user();
+        $organizationId = $user->organization_id;
+        
+        // Get users that can be assigned to cases (lawyers and employees only)
+        $users = User::where('organization_id', $organizationId)
+            ->whereIn('role', ['lawyer', 'employee'])
+            ->where('status', 'active')
+            ->select('id', 'first_name', 'last_name', 'email', 'role', 'username')
+            ->orderBy('first_name')
+            ->get()
+            ->map(function($user) {
+                return [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'name' => $user->first_name . ' ' . $user->last_name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'username' => $user->username,
+                    'display_name' => ($user->first_name . ' ' . $user->last_name) ?: $user->username ?: $user->email,
+                ];
+            });
+        
+        return response()->json($users);
+    }
 
     /**
-     * Display the specified resource.
+     * Display the specified resource (filtered by organization)
      */
-    public function show(string $id)
+    public function show($id)
     {
-        //
-        $case = Cases::findOrFail($id);
+        $user = Auth::user();
+        $organizationId = $user->organization_id;
+        
+        $case = Cases::where('organization_id', $organizationId)
+            ->with(['client', 'assignedUser', 'supervisor', 'caseType'])
+            ->findOrFail($id);
+            
         return response()->json($case);
     }
 
+    /**
+     * Get cases for the logged-in lawyer (filtered by organization)
+     */
     public function lawyerCases()
     {
-        $lawyerCase = Cases::where('assigned_to', Auth::user()->id)->get();
-        return response()->json($lawyerCase);
+        $user = Auth::user();
+        $organizationId = $user->organization_id;
+        
+        $lawyerCases = Cases::where('organization_id', $organizationId)
+            ->where('assigned_to', $user->id)
+            ->with(['client', 'supervisor'])
+            ->get();
+            
+        return response()->json($lawyerCases);
     }
 
-    // Client cases
+    /**
+     * Get cases for the logged-in client (filtered by organization)
+     */
     public function clientCases()
     {
-        $clientCases = Cases::where('client_id', Auth::user()->id)->get();
-
-        // dd($clientCases);
-        return response()->json($clientCases);
+        try {
+            $user = Auth::user();
+            $organizationId = $user->organization_id;
+            
+            // Get the client record for this user within the organization
+            $client = Client::where('user_id', $user->id)
+                ->where('organization_id', $organizationId)
+                ->first();
+            
+            if (!$client) {
+                return response()->json([]);
+            }
+            
+            // Get cases for this client within the organization
+            $cases = Cases::where('organization_id', $organizationId)
+                ->where('client_id', $client->id)
+                ->with(['assignedLawyer:id,first_name,last_name', 'supervisor:id,first_name,last_name'])
+                ->get();
+            
+            return response()->json($cases);
+        } catch (\Exception $e) {
+            Log::error('Error in clientCases: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, $id)
     {
-        $case = Cases::findOrFail($id);
+        $user = Auth::user();
+        $organizationId = $user->organization_id;
+        
+        $case = Cases::where('organization_id', $organizationId)->findOrFail($id);
 
         $validated = $request->validate([
             'case_number' => 'sometimes|required|string|unique:cases,case_number,' . $id,
-            'organization_id' => 'sometimes|required|exists:organizations,id',
             'case_type' => 'sometimes|required|string|max:255',
             'client_id' => 'sometimes|required|exists:clients,id',
             'case_name' => 'sometimes|required|string|max:255',
@@ -161,19 +263,50 @@ class CaseController extends Controller
         DB::beginTransaction();
 
         try {
+            // Verify client belongs to organization if being updated
+            if (isset($validated['client_id'])) {
+                $client = Client::where('id', $validated['client_id'])
+                    ->where('organization_id', $organizationId)
+                    ->first();
+                    
+                if (!$client) {
+                    return response()->json(['error' => 'Client not found in your organization'], 404);
+                }
+            }
+            
+            // Verify assigned_to user belongs to organization if being updated
+            if (isset($validated['assigned_to']) && !empty($validated['assigned_to'])) {
+                $assignedUser = User::where('id', $validated['assigned_to'])
+                    ->where('organization_id', $organizationId)
+                    ->first();
+                    
+                if (!$assignedUser) {
+                    return response()->json(['error' => 'Assigned user not found in your organization'], 404);
+                }
+            }
+            
+            // Verify supervisor belongs to organization if being updated
+            if (isset($validated['supervisor'])) {
+                $supervisor = User::where('id', $validated['supervisor'])
+                    ->where('organization_id', $organizationId)
+                    ->first();
+                    
+                if (!$supervisor) {
+                    return response()->json(['error' => 'Supervisor not found in your organization'], 404);
+                }
+            }
 
             $documentId = null;
 
             // Handle file upload
             if ($request->hasFile('document')) {
-
                 $file = $request->file('document');
                 $path = $file->store('documents', 'public');
 
                 $document = Document::create([
                     'file_path' => $path,
                     'uploaded_by' => Auth::id(),
-                    'organization_id' => $validated['organization_id'] ?? $case->organization_id,
+                    'organization_id' => $organizationId,
                     'confidentiality' => $validated['confidentiality'] ?? $case->confidentiality,
                     'case_id' => $case->id,
                 ]);
@@ -196,9 +329,8 @@ class CaseController extends Controller
                 'data' => $case
             ], 200);
         } catch (\Exception $e) {
-
             DB::rollBack();
-
+            Log::error('Case update failed: ' . $e->getMessage());
             return response()->json([
                 'message' => 'Failed to update case',
                 'error' => $e->getMessage()
@@ -206,14 +338,17 @@ class CaseController extends Controller
         }
     }
 
-
     /**
-     * Remove the specified resource from storage.
+     * Remove the specified resource from storage (soft delete)
      */
-    public function destroy(string $id)
+    public function destroy($id)
     {
-        $case = Cases::findOrFail($id);
+        $user = Auth::user();
+        $organizationId = $user->organization_id;
+        
+        $case = Cases::where('organization_id', $organizationId)->findOrFail($id);
         $case->delete();
-        return response()->json(null, 204);
+        
+        return response()->json(['message' => 'Case deleted successfully'], 200);
     }
 }

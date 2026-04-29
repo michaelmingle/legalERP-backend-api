@@ -1,16 +1,22 @@
 <?php
+// app/Models/Client.php
 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Client extends Model
 {
+    use LogsActivity, SoftDeletes;
+
     protected $fillable = [
         'user_id',
         'organization_id',
         'full_name',
         'client_number',
+        'type',
         'email',
         'phone',
         'mobile',
@@ -41,14 +47,13 @@ class Client extends Model
         return $this->hasMany(Document::class);
     }
 
-    // Assigned laywer relationship
     public function assignedLawyer()
     {
         return $this->belongsTo(User::class, 'assigned_lawyer');
     }
 
     public function user()
-{
-    return $this->belongsTo(User::class);
-}
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
 }

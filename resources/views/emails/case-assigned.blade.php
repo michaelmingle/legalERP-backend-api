@@ -1,49 +1,46 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Case Assignment Notification</title>
+    <title>Case Assigned</title>
     <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #320DFF, #5B2EFF); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e5e7eb; border-top: none; }
-        .button { display: inline-block; padding: 10px 20px; background: #320DFF; color: white; text-decoration: none; border-radius: 8px; margin-top: 20px; }
-        .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #6b7280; }
+        .header { background: #320DFF; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background: #f9fafb; }
+        .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+        .button { background: #320DFF; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }
+        .info-box { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #320DFF; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h2>Legal ERP System</h2>
+            <h2>Case Assignment Notification</h2>
         </div>
-        
         <div class="content">
             <h3>Hello {{ $data['to_name'] }},</h3>
             
-            @if($data['role'] === 'client')
-                <p>A new case has been assigned to you:</p>
-                <ul>
-                    <li><strong>Case Number:</strong> {{ $data['case_number'] }}</li>
-                    <li><strong>Case Name:</strong> {{ $data['case_name'] }}</li>
-                    <li><strong>Assigned Lawyer:</strong> {{ $data['assigned_lawyer'] }}</li>
-                </ul>
-            @else
-                <p>You have been assigned as the lawyer for a new case:</p>
-                <ul>
-                    <li><strong>Case Number:</strong> {{ $data['case_number'] }}</li>
-                    <li><strong>Case Name:</strong> {{ $data['case_name'] }}</li>
-                    <li><strong>Client:</strong> {{ $data['client_name'] }}</li>
-                </ul>
-            @endif
+            <div class="info-box">
+                <p><strong>Case Name:</strong> {{ $data['case_name'] }}</p>
+                <p><strong>Case Number:</strong> {{ $data['case_number'] }}</p>
+                @if(isset($data['assigned_lawyer']))
+                    <p><strong>Assigned Lawyer:</strong> {{ $data['assigned_lawyer'] }}</p>
+                @endif
+                @if(isset($data['client_name']))
+                    <p><strong>Client:</strong> {{ $data['client_name'] }}</p>
+                @endif
+                <p><strong>Role:</strong> {{ ucfirst($data['role']) }}</p>
+            </div>
             
-            <p>Please log in to the system for more details and to start working on this case.</p>
+            <p>You can view the case details by logging into the system.</p>
             
-            <a href="{{ url('/login') }}" class="button">Login to Dashboard</a>
+            <p style="margin-top: 20px;">
+                <a href="{{ config('app.frontend_url') }}/dashboard/cases" class="button">View Case</a>
+            </p>
         </div>
-        
         <div class="footer">
-            <p>This is an automated message from Legal ERP System. Please do not reply to this email.</p>
-            <p>&copy; {{ date('Y') }} Legal ERP. All rights reserved.</p>
+            <p>&copy; {{ date('Y') }} Legal ERP System. All rights reserved.</p>
+            <p>This is an automated message, please do not reply.</p>
         </div>
     </div>
 </body>

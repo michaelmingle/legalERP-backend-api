@@ -1,12 +1,18 @@
 <?php
+// app/Models/Invoice.php
 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Invoice extends Model
 {
+    use LogsActivity, SoftDeletes;
+
     protected $fillable = [
+        'organization_id',  // Add this
         'invoice_number',
         'client_id',
         'case_id',
@@ -18,6 +24,15 @@ class Invoice extends Model
         'vat',
         'total',
         'status'
+    ];
+
+    protected $casts = [
+        'issue_date' => 'date',
+        'due_date' => 'date',
+        'subtotal' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'vat' => 'decimal:2',
+        'total' => 'decimal:2',
     ];
 
     protected $with = [
@@ -35,7 +50,7 @@ class Invoice extends Model
 
     public function payments()
     {
-        return $this->hasMany(InvoicePayment::class);
+        return $this->hasMany(Payment::class);
     }
 
     public function client()
@@ -50,6 +65,11 @@ class Invoice extends Model
 
     public function lawyer()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'lawyer_id');
+    }
+    
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
     }
 }

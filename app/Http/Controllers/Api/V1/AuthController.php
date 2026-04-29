@@ -9,16 +9,74 @@ use App\Models\TeamInvite;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use App\Traits\LogsActivity;
+use App\Mail\TeamInviteMail;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
+    use LogsActivity;
+
     public function index(Request $request)
-    {
-        $users = User::with('organization')->get();
-        return response()->json($users);
+{
+    $user = Auth::user();
+    $organizationId = $user->organization_id;
+    
+    $users = User::where('organization_id', $organizationId)->get();
+    return response()->json($users);
+}
+
+    public function getCurrentUser(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized - User not authenticated'
+            ], 401);
+        }
+        
+        // Ensure role is set, default to 'employee' if null
+        if (!$user->role) {
+            $user->role = 'employee';
+            $user->save();
+        }
+        
+        // Return the user data with role explicitly included
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'email' => $user->email,
+                'username' => $user->username,
+                'role' => $user->role,
+                'photo_url' => $user->photo_url,
+                'organization_id' => $user->organization_id,
+                'status' => $user->status,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+            ]
+        ], 200);
+        $this->logActivity('get_current_user', 'User Management', $user->id, $user->email);
+    } catch (\Exception $e) {
+        Log::error('Error in getCurrentUser: ' . $e->getMessage());
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to get current user: ' . $e->getMessage()
+        ], 500);
     }
+}
+    
     // Register
     public function register(Request $request)
     {
@@ -75,10 +133,20 @@ class AuthController extends Controller
             // 4. Create team invites
             if (!empty($validated['invites'])) {
                 foreach ($validated['invites'] as $email) {
-                    TeamInvite::create([
+                    $invite = TeamInvite::create([
                         'organization_id' => $organization->id,
-                        'email'           => $email,
+                        'email' => $email,
+                        'token' => Str::random(64),
+                        'status' => 'pending',
+                        'expires_at' => now()->addDays(7),
                     ]);
+                    
+                    // Send email invitation
+                    try {
+                        Mail::to($email)->send(new TeamInviteMail($invite, $organization));
+                    } catch (\Exception $e) {
+                        Log::error('Failed to send invite to ' . $email . ': ' . $e->getMessage());
+                    }
                 }
             }
 
@@ -116,6 +184,8 @@ class AuthController extends Controller
             'last_activity_at' => now(),
         ]);
 
+        $this->logActivity('login', 'Authentication', $user->id, $user->email);
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -127,10 +197,10 @@ class AuthController extends Controller
     }
 
     public function getOnlineStatus($id)
-{
-    $user = User::find($id);
-    return response()->json(['is_online' => $user ? $user->is_online : false]);
-}
+    {
+        $user = User::find($id);
+        return response()->json(['is_online' => $user ? $user->is_online : false]);
+    }
 
     // store new user (admin only)
     public function store(Request $request)
@@ -224,13 +294,35 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
+        $this->logActivity('logout', 'Authentication', $request->user()->id, $request->user()->email);
 
         return response()->json(['message' => 'Logged out successfully']);
     }
 
-    // Get authenticated user
+    // Get authenticated user (alternative method)
     public function user(Request $request)
     {
-        return response()->json($request->user());
+        try {
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+            
+            $this->logActivity('get_current_user', 'User Management', $user->id, $user->email);
+            return response()->json([
+                'success' => true,
+                'data' => $user
+            ], 200);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }

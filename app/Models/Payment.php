@@ -3,9 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Payment extends Model
 {
+    use LogsActivity, SoftDeletes;
+
+    protected $table = 'payments';
     protected $fillable = [
         'organization_id',
         'invoice_id',

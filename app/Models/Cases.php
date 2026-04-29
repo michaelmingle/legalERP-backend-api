@@ -3,9 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Cases extends Model
 {
+    use LogsActivity, SoftDeletes;
+
     protected $fillable = [
         'case_number',
         'organization_id',
@@ -58,6 +62,11 @@ class Cases extends Model
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
+    public function assignedLawyer()
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
+    }
+
     public function supervisor()
     {
         return $this->belongsTo(User::class, 'supervisor');
@@ -72,4 +81,9 @@ class Cases extends Model
 {
     return $this->hasMany(TimeTracking::class, 'case_id');
 }
+
+public function appointments()
+    {
+        return $this->hasMany(Appointment::class);
+    }
 }

@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
 
 class InvoiceItem extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'invoice_id',
         'description',
@@ -19,4 +22,6 @@ class InvoiceItem extends Model
     {
         return $this->belongsTo(Invoice::class);
     }
+
+    
 }

@@ -1,25 +1,38 @@
 <?php
+// app/Models/Document.php
 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Document extends Model
 {
+    use LogsActivity, SoftDeletes;
+
     protected $fillable = [
-        'file_path',
         'organization_id',
-        'uploaded_by',
         'case_id',
+        'uploaded_by',
+        'file_path',
+        'file_name',
+        'file_size',
+        'file_type',
         'description',
-        'original_filename',
-        'mime_type',
         'confidentiality',
     ];
 
-    public function uploader()
+    protected $casts = [
+        'file_size' => 'integer',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
+
+    public function organization()
     {
-        return $this->belongsTo(User::class, 'uploaded_by');
+        return $this->belongsTo(Organization::class);
     }
 
     public function case()
@@ -27,13 +40,8 @@ class Document extends Model
         return $this->belongsTo(Cases::class);
     }
 
-    public function organization()
+    public function uploader()
     {
-        return $this->belongsTo(Organization::class);
+        return $this->belongsTo(User::class, 'uploaded_by');
     }
-
-    // public function cases()
-    // {
-    //     return $this->hasMany(Cases::class);
-    // }
 }
