@@ -126,12 +126,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/cases/{caseId}/time-summary', [TimeTrackingController::class, 'getCaseTimeSummary']);
     Route::get('/cases/{caseId}/latest-stage', [TimeTrackingController::class, 'getLatestCaseStage']);
 
-    Route::get('/conversations', [ChatController::class, 'getConversations']);
-    Route::post('/conversations', [ChatController::class, 'startConversation']);
-    Route::get('/conversations/{id}/messages', [ChatController::class, 'getMessages']);
-    Route::post('/conversations/{id}/messages', [ChatController::class, 'sendMessage']);
-    Route::post('/conversations/{id}/read', [ChatController::class, 'markAsRead']);
-    Route::post('/conversations/{id}/typing', [ChatController::class, 'sendTypingIndicator']);
+   Route::get('/conversations', [ChatController::class, 'getConversations']);
+        Route::post('/conversations', [ChatController::class, 'startConversation']);
+        Route::get('/conversations/{id}/messages', [ChatController::class, 'getMessages']);
+        Route::post('/conversations/{id}/messages', [ChatController::class, 'sendMessage']);
+        Route::post('/conversations/{id}/read', [ChatController::class, 'markAsRead']); // This exists
+        Route::post('/conversations/{id}/typing', [ChatController::class, 'sendTypingIndicator']);
 
     // Users
     Route::get('/users/available', [ChatController::class, 'getAvailableUsers']);
@@ -151,6 +151,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('appointments', AppointmentController::class);
     Route::patch('appointments/{id}/status', [AppointmentController::class, 'updateStatus']);
+
+    Route::post('/send-client-credentials', [NotificationController::class, 'sendClientCredentials']);
+
+    Route::post('/send-user-credentials', [NotificationController::class, 'sendUserCredentials']);
+Route::post('/send-password-reset', [NotificationController::class, 'sendPasswordResetEmail']);
 
     // Client specific appointment routes
     Route::get('/client-appointments', [AppointmentController::class, 'index']);

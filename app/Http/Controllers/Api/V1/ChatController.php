@@ -184,46 +184,69 @@ class ChatController extends Controller
     /**
      * Mark messages as read (filtered by organization)
      */
-    public function markAsRead($conversationId)
+   public function markAsRead($id)  // Changed from $conversationId to $id to match route
     {
         try {
-            $user = Auth::user();
-            $organizationId = $user->organization_id;
+            Log::info('markAsRead called with ID: ' . $id);
             
-            if (!in_array($user->role, ['employee', 'lawyer', 'client'])) {
-                return response()->json(['error' => 'Unauthorized'], 403);
+            $user = Auth::user();
+            if (!$user) {
+                Log::error('No authenticated user');
+                return response()->json(['error' => 'Unauthenticated'], 401);
             }
             
-            $conversation = Conversation::where('id', $conversationId)
-                ->where('organization_id', $organizationId)
-                ->first();
-                
+            Log::info('User ID: ' . $user->id . ', Role: ' . $user->role);
+            
+            // Check if user has permission to access chat
+            if (!in_array($user->role, ['employee', 'lawyer', 'client'])) {
+                Log::error('User role not allowed: ' . $user->role);
+                return response()->json(['error' => 'Unauthorized - Invalid role'], 403);
+            }
+            
+            // Find the conversation
+            $conversation = Conversation::find($id);
+            
             if (!$conversation) {
+                Log::error('Conversation not found with ID: ' . $id);
                 return response()->json(['error' => 'Conversation not found'], 404);
             }
             
+            Log::info('Found conversation: ' . $conversation->id);
+            
+            // Check if user is part of this conversation
+            // Your conversation table has client_id and lawyer_id
             if ($conversation->client_id !== $user->id && $conversation->lawyer_id !== $user->id) {
-                return response()->json(['error' => 'Unauthorized'], 403);
+                Log::error('User ' . $user->id . ' is not part of conversation ' . $id);
+                return response()->json(['error' => 'Unauthorized - Not part of conversation'], 403);
             }
             
-            $updated = Message::where('conversation_id', $conversationId)
+            // Mark messages as read
+            $updatedCount = Message::where('conversation_id', $id)
                 ->where('sender_id', '!=', $user->id)
                 ->whereNull('read_at')
                 ->update(['read_at' => now()]);
             
-            if ($updated) {
-                try {
-                    broadcast(new MessageRead($conversationId, $user->id))->toOthers();
-                } catch (\Exception $e) {
-                    Log::warning('Broadcast failed: ' . $e->getMessage());
-                }
+            Log::info('Marked ' . $updatedCount . ' messages as read');
+            
+            // Broadcast the read status (optional - can fail silently)
+            try {
+                broadcast(new MessageRead($id, $user->id))->toOthers();
+            } catch (\Exception $e) {
+                Log::warning('Broadcast failed but messages were marked as read: ' . $e->getMessage());
+                // Don't return error - this is non-critical
             }
             
-            return response()->json(['success' => true]);
+            return response()->json([
+                'success' => true,
+                'messages_marked' => $updatedCount
+            ]);
             
         } catch (\Exception $e) {
             Log::error('Error in markAsRead: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to mark as read'], 500);
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            return response()->json([
+                'error' => 'Failed to mark as read: ' . $e->getMessage()
+            ], 500);
         }
     }
     
