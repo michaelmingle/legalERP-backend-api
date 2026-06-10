@@ -116,7 +116,8 @@ public function updateGeneral(Request $request)
         ];
         
         foreach ($settings as $key => $value) {
-            Setting::updateOrCreate(
+            app(\App\Services\SettingsService::class)->forget($organizationId);
+        Setting::updateOrCreate(
                 ['organization_id' => $organizationId, 'key' => $key],
                 ['value' => $value, 'type' => 'string', 'group' => 'general']
             );
@@ -174,6 +175,7 @@ public function updateGeneral(Request $request)
             $emailSettings['mail_password'] = encrypt($emailSettings['mail_password']);
         }
         
+        app(\App\Services\SettingsService::class)->forget($organizationId);
         Setting::updateOrCreate(
             ['organization_id' => $organizationId, 'key' => 'email_settings'],
             ['value' => json_encode($emailSettings), 'type' => 'json', 'group' => 'email']
@@ -205,6 +207,7 @@ public function updateGeneral(Request $request)
             'primary_color', 'logo_url', 'favicon_url', 'dark_mode', 'sidebar_collapsed'
         ]);
         
+        app(\App\Services\SettingsService::class)->forget($organizationId);
         Setting::updateOrCreate(
             ['organization_id' => $organizationId, 'key' => 'appearance_settings'],
             ['value' => json_encode($appearanceSettings), 'type' => 'json', 'group' => 'appearance']
@@ -237,6 +240,7 @@ public function updateGeneral(Request $request)
             'default_billing_method', 'send_invoice_automatically'
         ]);
         
+        app(\App\Services\SettingsService::class)->forget($organizationId);
         Setting::updateOrCreate(
             ['organization_id' => $organizationId, 'key' => 'billing_settings'],
             ['value' => json_encode($billingSettings), 'type' => 'json', 'group' => 'billing']
@@ -270,6 +274,7 @@ public function updateGeneral(Request $request)
             'password_expiry_days', 'require_strong_password', 'ip_whitelist'
         ]);
         
+        app(\App\Services\SettingsService::class)->forget($organizationId);
         Setting::updateOrCreate(
             ['organization_id' => $organizationId, 'key' => 'security_settings'],
             ['value' => json_encode($securitySettings), 'type' => 'json', 'group' => 'security']

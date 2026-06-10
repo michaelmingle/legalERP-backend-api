@@ -189,12 +189,19 @@ class CaseController extends Controller
     {
         $user = Auth::user();
         $organizationId = $user->organization_id;
-        
-        $lawyerCases = Cases::where('organization_id', $organizationId)
-            ->where('assigned_to', $user->id)
+
+        // Scope by assigned_to first (that's the real ownership signal), then by org
+        // when known. Tolerate legacy NULL org_id rows so historical assignments still show.
+        $lawyerCases = Cases::where('assigned_to', $user->id)
+            ->when($organizationId, function ($q) use ($organizationId) {
+                $q->where(function ($w) use ($organizationId) {
+                    $w->where('organization_id', $organizationId)
+                      ->orWhereNull('organization_id');
+                });
+            })
             ->with(['client', 'supervisor'])
             ->get();
-            
+
         return response()->json($lawyerCases);
     }
 

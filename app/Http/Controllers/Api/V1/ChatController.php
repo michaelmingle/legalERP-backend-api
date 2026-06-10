@@ -34,7 +34,11 @@ class ChatController extends Controller
                     $query->where('client_id', $user->id)
                           ->orWhere('lawyer_id', $user->id);
                 })
-                ->where('organization_id', $organizationId)
+                ->where(function ($q) use ($organizationId) {
+                    // Match the user's org, but also surface legacy rows with NULL org_id
+                    $q->where('organization_id', $organizationId)
+                      ->orWhereNull('organization_id');
+                })
                 ->with(['client', 'lawyer', 'lastMessage.sender'])
                 ->orderBy('updated_at', 'desc')
                 ->get()
@@ -92,21 +96,30 @@ class ChatController extends Controller
         try {
             $user = Auth::user();
             $organizationId = $user->organization_id;
-            
+
             if (!in_array($user->role, ['employee', 'lawyer', 'client'])) {
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
-            
+
             $conversation = Conversation::where('id', $conversationId)
-                ->where('organization_id', $organizationId)
+                ->where(function ($q) use ($organizationId) {
+                    $q->where('organization_id', $organizationId)
+                      ->orWhereNull('organization_id');
+                })
                 ->first();
-                
+
             if (!$conversation) {
                 return response()->json(['error' => 'Conversation not found'], 404);
             }
-            
+
             if ($conversation->client_id !== $user->id && $conversation->lawyer_id !== $user->id) {
                 return response()->json(['error' => 'Unauthorized'], 403);
+            }
+
+            // Backfill organization_id on legacy rows so downstream queries are clean
+            if ($conversation->organization_id === null && $organizationId) {
+                $conversation->organization_id = $organizationId;
+                $conversation->saveQuietly();
             }
             
             $messages = Message::where('conversation_id', $conversationId)
@@ -146,17 +159,25 @@ class ChatController extends Controller
             ]);
             
             $conversation = Conversation::where('id', $conversationId)
-                ->where('organization_id', $organizationId)
+                ->where(function ($q) use ($organizationId) {
+                    $q->where('organization_id', $organizationId)
+                      ->orWhereNull('organization_id');
+                })
                 ->first();
-                
+
             if (!$conversation) {
                 return response()->json(['error' => 'Conversation not found'], 404);
             }
-            
+
             if ($conversation->client_id !== $user->id && $conversation->lawyer_id !== $user->id) {
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
-            
+
+            if ($conversation->organization_id === null && $organizationId) {
+                $conversation->organization_id = $organizationId;
+                $conversation->saveQuietly();
+            }
+
             $message = Message::create([
                 'conversation_id' => $conversationId,
                 'sender_id' => $user->id,
@@ -377,17 +398,20 @@ class ChatController extends Controller
             }
             
             $conversation = Conversation::where('id', $conversationId)
-                ->where('organization_id', $organizationId)
+                ->where(function ($q) use ($organizationId) {
+                    $q->where('organization_id', $organizationId)
+                      ->orWhereNull('organization_id');
+                })
                 ->first();
-                
+
             if (!$conversation) {
                 return response()->json(['error' => 'Conversation not found'], 404);
             }
-            
+
             if ($conversation->client_id !== $user->id && $conversation->lawyer_id !== $user->id) {
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
-            
+
             try {
                 broadcast(new UserTyping($conversationId, $user->id, $request->is_typing))->toOthers();
             } catch (\Exception $e) {

@@ -10,6 +10,7 @@ class JobOpening extends Model
     use SoftDeletes, LogsActivity;
 
     protected $fillable = [
+        'organization_id',
         'job_title',
         'description',
         'number_of_openings',
@@ -17,6 +18,11 @@ class JobOpening extends Model
         'posting_date',
         'closing_date',
     ];
+
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
+    }
 
     protected $casts = [
         'posting_date' => 'date',

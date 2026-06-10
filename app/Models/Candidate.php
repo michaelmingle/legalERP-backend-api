@@ -10,6 +10,7 @@ class Candidate extends Model
     use SoftDeletes, LogsActivity;
 
     protected $fillable = [
+        'organization_id',
         'full_name',
         'email',
         'role',

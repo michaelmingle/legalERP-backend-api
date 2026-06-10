@@ -80,12 +80,34 @@ class AuthController extends Controller
     // Register
     public function register(Request $request)
     {
+        $sys = app(\App\Services\SettingsService::class)->system();
+        $minLength = max(8, (int) ($sys['min_password_length'] ?? 8));
+        $strong    = (bool) ($sys['require_strong_password'] ?? false);
+        $passwordRule = "required|string|min:{$minLength}|confirmed";
+        if ($strong) {
+            $passwordRule .= '|regex:/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/';
+        }
+
+        // Enforce super-admin "allowed_domains" allow-list (if any).
+        $allowedDomains = $sys['allowed_domains'] ?? [];
+        if (is_array($allowedDomains) && !empty($allowedDomains)) {
+            $email = strtolower((string) $request->input('email', ''));
+            $domain = substr(strrchr($email, '@') ?: '', 1);
+            $allowed = array_map(fn ($d) => strtolower(trim((string) $d)), $allowedDomains);
+            $allowed = array_filter($allowed, fn ($d) => $d !== '');
+            if (!empty($allowed) && !in_array($domain, $allowed, true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'email' => ['Registrations are restricted to: ' . implode(', ', $allowed)],
+                ]);
+            }
+        }
+
         $validated = $request->validate([
             // User fields
             'first_name' => 'required|string|max:255',
             'last_name'  => 'required|string|max:255',
             'email'      => 'required|string|email|max:255|unique:users',
-            'password'   => 'required|string|min:8|confirmed',
+            'password'   => $passwordRule,
 
             // Organization fields
             'name'    => 'required|string|max:255',
@@ -163,7 +185,7 @@ class AuthController extends Controller
         });
     }
 
-    // Login
+    // Login (with system-setting-aware lockout)
     public function login(Request $request)
     {
         $request->validate([
@@ -171,13 +193,36 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
+        $settings = app(\App\Services\SettingsService::class)->system();
+        $maxAttempts     = max(3, (int) ($settings['max_login_attempts'] ?? 5));
+        $lockoutMinutes  = max(1, (int) ($settings['lockout_duration'] ?? 15));
+
+        $cacheKey = 'login_attempts:' . sha1(strtolower($request->email) . '|' . $request->ip());
+        $attempts = (int) cache()->get($cacheKey, 0);
+
+        if ($attempts >= $maxAttempts) {
+            throw ValidationException::withMessages([
+                'email' => ["Too many failed attempts. Try again in {$lockoutMinutes} minutes."],
+            ]);
+        }
+
         $user = User::where('email', $request->email)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
+            cache()->put($cacheKey, $attempts + 1, now()->addMinutes($lockoutMinutes));
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
         }
+
+        // Optional: refuse login for non-active users.
+        if (isset($user->status) && in_array(strtolower($user->status ?? ''), ['suspended', 'inactive'])) {
+            throw ValidationException::withMessages([
+                'email' => ['This account is not active. Please contact your administrator.'],
+            ]);
+        }
+
+        cache()->forget($cacheKey);
 
         $user->update([
             'last_login_at' => now(),

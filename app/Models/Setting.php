@@ -18,10 +18,6 @@ class Setting extends Model
         'group'
     ];
 
-    protected $casts = [
-        'value' => 'json'
-    ];
-
     public function organization()
     {
         return $this->belongsTo(Organization::class);

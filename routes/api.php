@@ -21,6 +21,15 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\SettingController;
 use App\Http\Controllers\Api\V1\ArchiveController;
+use App\Http\Controllers\Api\V1\SuperAdmin\DashboardController;
+use App\Http\Controllers\Api\V1\SuperAdmin\OrganizationController as SuperAdminOrganizationController;
+use App\Http\Controllers\Api\V1\SuperAdmin\SubscriptionController;
+use App\Http\Controllers\Api\V1\SuperAdmin\ActivityController;
+use App\Http\Controllers\Api\V1\SuperAdmin\SettingsController;
+use App\Http\Controllers\Api\V1\SuperAdmin\SuperAdminController;
+use App\Http\Controllers\Api\V1\AppConfigController;
+use App\Http\Controllers\Api\V1\AccountController;
+use App\Http\Controllers\Api\V1\PayrollController;
 
 Route::get('/test', function () {
     return response()->json(['message' => 'API is working']);
@@ -29,6 +38,7 @@ Route::get('/test', function () {
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/app-config', [AppConfigController::class, 'index']);
 
 // routes/api.php
 Route::get('/invite/accept/{token}', [TeamInviteController::class, 'accept']);
@@ -44,6 +54,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     // Route::get('/user', [AuthController::class, 'user']);
     Route::get('/me', [AuthController::class, 'getCurrentUser']);
+
+    // Personal account management (any authenticated role)
+    Route::put('/me',                [AccountController::class, 'updateProfile']);
+    Route::put('/me/password',       [AccountController::class, 'updatePassword']);
+    Route::get('/me/preferences',    [AccountController::class, 'getPreferences']);
+    Route::put('/me/preferences',    [AccountController::class, 'updatePreferences']);
+    Route::post('/me/avatar',        [AccountController::class, 'uploadAvatar']);
     Route::get('/user', [AuthController::class, 'user']);
     Route::get('/users', [AuthController::class, 'index']);
     Route::post('/users', [AuthController::class, 'store']);
@@ -118,6 +135,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('job-openings', JobOpeningController::class);
     Route::apiResource('candidates', CandidateController::class);
 
+    // Payroll (HR / admin / owner)
+    Route::get   ('/payrolls/summary',              [PayrollController::class, 'summary']);
+    Route::get   ('/payrolls/export',               [PayrollController::class, 'export']);
+    Route::post  ('/payrolls/run',                  [PayrollController::class, 'run']);
+    Route::post  ('/payrolls/generate-for-employee',[PayrollController::class, 'generateForEmployee']);
+    Route::apiResource('payrolls', PayrollController::class);
+
     // Route::apiResource('time-trackings', TimeTrackingController::class);
     // Route::get('/client/time-trackings', [TimeTrackingController::class, 'getTimeTracking']);
 
@@ -188,5 +212,30 @@ Route::post('/send-password-reset', [NotificationController::class, 'sendPasswor
     Route::delete('/force-delete', [ArchiveController::class, 'forceDelete']);
     Route::post('/restore-all', [ArchiveController::class, 'restoreAll']);
     Route::delete('/empty-all', [ArchiveController::class, 'emptyAll']);
+});
+
+Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('super-admin')->group(function () {
+    // Dashboard
+    Route::get('/dashboard/stats', [SuperAdminController::class, 'getStats']);
+
+    // Organizations
+    Route::get('/organizations', [SuperAdminOrganizationController::class, 'index']);
+    Route::get('/organizations/list', [SuperAdminOrganizationController::class, 'list']);
+    Route::get('/organizations/{id}', [SuperAdminOrganizationController::class, 'show']);
+    Route::put('/organizations/{id}/status', [SuperAdminOrganizationController::class, 'updateStatus']);
+    Route::delete('/organizations/{id}', [SuperAdminOrganizationController::class, 'destroy']);
+
+    // Subscriptions
+    Route::get('/subscriptions', [SubscriptionController::class, 'index']);
+    Route::post('/subscriptions/{id}/renew', [SubscriptionController::class, 'renew']);
+    Route::post('/subscriptions/{id}/cancel', [SubscriptionController::class, 'cancel']);
+
+    // Activities
+    Route::get('/user-activities', [ActivityController::class, 'index']);
+    Route::get('/user-activities/export', [ActivityController::class, 'export']);
+
+    // Settings
+    Route::get('/settings/{tab}', [SettingsController::class, 'getSettings']);
+    Route::put('/settings/{tab}', [SettingsController::class, 'updateSettings']);
 });
 });

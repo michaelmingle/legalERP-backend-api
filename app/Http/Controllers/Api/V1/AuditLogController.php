@@ -19,18 +19,20 @@ class AuditLogController extends Controller
         try {
             $user = Auth::user();
             $organizationId = $user->organization_id;
-            
-            // Only admin and owner can view audit logs
-            if (!in_array($user->role, ['admin', 'owner'])) {
+            $isSuperAdmin = $user->role === 'super_admin';
+
+            // Only admin, owner and super_admin can view audit logs
+            if (!in_array($user->role, ['admin', 'owner', 'super_admin'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized to view audit logs'
                 ], 403);
             }
-            
-            $query = AuditLog::where('organization_id', $organizationId)
-                ->with('user')
-                ->orderBy('created_at', 'desc');
+
+            $query = AuditLog::with('user')->orderBy('created_at', 'desc');
+            if (!$isSuperAdmin) {
+                $query->where('organization_id', $organizationId);
+            }
             
             // Filter by module
             if ($request->has('module') && $request->module !== 'all' && $request->module !== '') {
@@ -71,26 +73,22 @@ class AuditLogController extends Controller
             $perPage = $request->get('per_page', 50);
             $logs = $query->paginate($perPage);
             
-            // Get statistics (filtered by organization)
+            // Get statistics (org-scoped for non super admins, global for super admins)
+            $scope = function () use ($isSuperAdmin, $organizationId) {
+                $q = AuditLog::query();
+                if (!$isSuperAdmin) {
+                    $q->where('organization_id', $organizationId);
+                }
+                return $q;
+            };
+
             $stats = [
-                'total' => AuditLog::where('organization_id', $organizationId)->count(),
-                'today' => AuditLog::where('organization_id', $organizationId)
-                    ->whereDate('created_at', today())
-                    ->count(),
-                'this_week' => AuditLog::where('organization_id', $organizationId)
-                    ->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
-                    ->count(),
-                'this_month' => AuditLog::where('organization_id', $organizationId)
-                    ->whereMonth('created_at', now()->month)
-                    ->count(),
-                'by_module' => AuditLog::where('organization_id', $organizationId)
-                    ->select('module', DB::raw('count(*) as total'))
-                    ->groupBy('module')
-                    ->get(),
-                'by_action' => AuditLog::where('organization_id', $organizationId)
-                    ->select('action', DB::raw('count(*) as total'))
-                    ->groupBy('action')
-                    ->get(),
+                'total'     => $scope()->count(),
+                'today'     => $scope()->whereDate('created_at', today())->count(),
+                'this_week' => $scope()->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+                'this_month' => $scope()->whereMonth('created_at', now()->month)->count(),
+                'by_module' => $scope()->select('module', DB::raw('count(*) as total'))->groupBy('module')->get(),
+                'by_action' => $scope()->select('action', DB::raw('count(*) as total'))->groupBy('action')->get(),
             ];
             
             return response()->json([
@@ -115,18 +113,20 @@ class AuditLogController extends Controller
         try {
             $user = Auth::user();
             $organizationId = $user->organization_id;
-            
-            // Only admin and owner can view audit logs
-            if (!in_array($user->role, ['admin', 'owner'])) {
+            $isSuperAdmin = $user->role === 'super_admin';
+
+            if (!in_array($user->role, ['admin', 'owner', 'super_admin'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized to view audit logs'
                 ], 403);
             }
-            
-            $log = AuditLog::where('organization_id', $organizationId)
-                ->with('user')
-                ->findOrFail($id);
+
+            $query = AuditLog::with('user');
+            if (!$isSuperAdmin) {
+                $query->where('organization_id', $organizationId);
+            }
+            $log = $query->findOrFail($id);
             
             return response()->json([
                 'success' => true,
@@ -148,18 +148,20 @@ class AuditLogController extends Controller
         try {
             $user = Auth::user();
             $organizationId = $user->organization_id;
-            
-            // Only admin and owner can view audit logs
-            if (!in_array($user->role, ['admin', 'owner'])) {
+            $isSuperAdmin = $user->role === 'super_admin';
+
+            if (!in_array($user->role, ['admin', 'owner', 'super_admin'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
                 ], 403);
             }
-            
-            $modules = AuditLog::where('organization_id', $organizationId)
-                ->distinct()
-                ->pluck('module');
+
+            $query = AuditLog::query();
+            if (!$isSuperAdmin) {
+                $query->where('organization_id', $organizationId);
+            }
+            $modules = $query->distinct()->pluck('module');
             
             return response()->json([
                 'success' => true,
@@ -181,18 +183,20 @@ class AuditLogController extends Controller
         try {
             $user = Auth::user();
             $organizationId = $user->organization_id;
-            
-            // Only admin and owner can view audit logs
-            if (!in_array($user->role, ['admin', 'owner'])) {
+            $isSuperAdmin = $user->role === 'super_admin';
+
+            if (!in_array($user->role, ['admin', 'owner', 'super_admin'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
                 ], 403);
             }
-            
-            $actions = AuditLog::where('organization_id', $organizationId)
-                ->distinct()
-                ->pluck('action');
+
+            $query = AuditLog::query();
+            if (!$isSuperAdmin) {
+                $query->where('organization_id', $organizationId);
+            }
+            $actions = $query->distinct()->pluck('action');
             
             return response()->json([
                 'success' => true,
@@ -214,19 +218,21 @@ class AuditLogController extends Controller
         try {
             $user = Auth::user();
             $organizationId = $user->organization_id;
-            
-            // Only admin and owner can clear audit logs
-            if (!in_array($user->role, ['admin', 'owner'])) {
+            $isSuperAdmin = $user->role === 'super_admin';
+
+            if (!in_array($user->role, ['admin', 'owner', 'super_admin'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
                 ], 403);
             }
-            
+
             $days = $request->get('days', 30);
-            $deleted = AuditLog::where('organization_id', $organizationId)
-                ->where('created_at', '<', now()->subDays($days))
-                ->delete();
+            $query = AuditLog::where('created_at', '<', now()->subDays($days));
+            if (!$isSuperAdmin) {
+                $query->where('organization_id', $organizationId);
+            }
+            $deleted = $query->delete();
             
             return response()->json([
                 'success' => true,
@@ -248,18 +254,19 @@ class AuditLogController extends Controller
         try {
             $user = Auth::user();
             $organizationId = $user->organization_id;
-            
-            // Only admin and owner can export audit logs
-            if (!in_array($user->role, ['admin', 'owner'])) {
+            $isSuperAdmin = $user->role === 'super_admin';
+
+            if (!in_array($user->role, ['admin', 'owner', 'super_admin'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
                 ], 403);
             }
-            
-            $query = AuditLog::where('organization_id', $organizationId)
-                ->with('user')
-                ->orderBy('created_at', 'desc');
+
+            $query = AuditLog::with('user')->orderBy('created_at', 'desc');
+            if (!$isSuperAdmin) {
+                $query->where('organization_id', $organizationId);
+            }
             
             if ($request->has('module') && $request->module !== 'all' && $request->module !== '') {
                 $query->where('module', $request->module);
@@ -326,7 +333,7 @@ class AuditLogController extends Controller
             $organizationId = $user->organization_id;
             
             // Only admin and owner can view audit stats
-            if (!in_array($user->role, ['admin', 'owner'])) {
+            if (!in_array($user->role, ['admin', 'owner', 'super_admin'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'

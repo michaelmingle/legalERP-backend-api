@@ -29,7 +29,11 @@ class EmployeeController extends Controller
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
             
-            $query = Employee::where('organization_id', $organizationId)
+            $query = Employee::query()
+                ->where(function ($q) use ($organizationId) {
+                    $q->where('organization_id', $organizationId)
+                      ->orWhereNull('organization_id'); // legacy rows
+                })
                 ->with('user');
 
             // Optional filters

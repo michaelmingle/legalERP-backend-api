@@ -27,12 +27,14 @@ class LeaveRequestController extends Controller
                 ->first();
             
             if (!$employee) {
+                // Not every user (eg. lawyers) has an Employee record. Treat as "no leaves".
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Employee record not found'
-                ], 404);
+                    'success' => true,
+                    'data'    => [],
+                    'message' => 'No employee profile for current user',
+                ], 200);
             }
-            
+
             $query = LeaveRequest::where('employee_id', $employee->id)
                 ->whereHas('employee', function($q) use ($organizationId) {
                     $q->where('organization_id', $organizationId);
@@ -84,7 +86,10 @@ class LeaveRequestController extends Controller
             }
             
             $query = LeaveRequest::whereHas('employee', function($q) use ($organizationId) {
-                    $q->where('organization_id', $organizationId);
+                    $q->where(function ($w) use ($organizationId) {
+                        $w->where('organization_id', $organizationId)
+                          ->orWhereNull('organization_id'); // legacy rows
+                    });
                 })
                 ->with(['employee.user', 'approver']);
 
@@ -113,15 +118,25 @@ class LeaveRequestController extends Controller
             $leaves->getCollection()->transform(function ($leave) {
                 $employee = $leave->employee;
                 $user = $employee ? $employee->user : null;
-                
+
                 return [
-                    'id'     => $leave->id,
-                    'name'   => $user ? ($user->first_name . ' ' . $user->last_name) : 'Unknown',
-                    'avatar' => $user && $user->photo_url ? $user->photo_url : null,
-                    'type'   => $leave->leave_type,
-                    'date'   => $leave->start_date->format('d/m/Y') . ' – ' . $leave->end_date->format('d/m/Y'),
-                    'status' => ucfirst($leave->status),
-                    'days'   => $leave->total_days,
+                    'id'         => $leave->id,
+                    'name'       => $user
+                        ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''))
+                        : ($employee?->full_name ?? 'Unknown'),
+                    'email'      => $user?->email,
+                    'role'       => $user?->role ?? $employee?->job_title,
+                    'department' => $employee?->department,
+                    'avatar'     => $user?->photo_url
+                        ?? ($employee?->photo ? asset('storage/' . $employee->photo) : null),
+                    'type'       => $leave->leave_type,
+                    'start_date' => optional($leave->start_date)->toDateString(),
+                    'end_date'   => optional($leave->end_date)->toDateString(),
+                    'date'       => ($leave->start_date ? $leave->start_date->format('d/m/Y') : '?')
+                                  . ' – ' . ($leave->end_date ? $leave->end_date->format('d/m/Y') : '?'),
+                    'status'     => ucfirst($leave->status ?? 'pending'),
+                    'days'       => $leave->total_days,
+                    'reason'     => $leave->reason ?? null,
                 ];
             });
 
@@ -374,12 +389,22 @@ class LeaveRequestController extends Controller
                 ->first();
                 
             if (!$employee) {
+                // Lawyers/owners may not have an Employee profile. Return zero-balance instead of 404.
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Employee record not found'
-                ], 404);
+                    'success' => true,
+                    'data'    => [
+                        'employee' => null,
+                        'balance'  => [
+                            'annual' => ['total' => 0, 'taken' => 0, 'remaining' => 0],
+                            'sick'   => ['total' => 0, 'taken' => 0, 'remaining' => 0],
+                            'casual' => ['total' => 0, 'taken' => 0, 'remaining' => 0],
+                        ],
+                        'leave_history' => [],
+                    ],
+                    'message' => 'No employee profile for current user',
+                ], 200);
             }
-            
+
             // Get approved leaves for the current year
             $currentYear = now()->year;
             $approvedLeaves = LeaveRequest::where('employee_id', $employee->id)
