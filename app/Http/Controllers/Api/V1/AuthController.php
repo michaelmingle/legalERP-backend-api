@@ -113,7 +113,10 @@ class AuthController extends Controller
             'name'    => 'required|string|max:255',
             'phone'   => 'nullable|string|max:20',
             'organisation_email'   => 'nullable|email|max:255',
-            'website' => 'nullable|url|max:255',
+            // Accept any website format (with or without scheme). We'll
+            // normalize it below by prepending https:// if missing, then
+            // sanity-check that it's a valid URL.
+            'website' => 'nullable|string|max:255',
             'team'    => 'nullable|string|max:255',
 
             // Goals (array of strings or IDs)
@@ -124,6 +127,16 @@ class AuthController extends Controller
             'invites' => 'nullable|array',
             'invites.*' => 'email|distinct',
         ]);
+
+        // Normalize the website: if the user typed "acme.com" we save
+        // "https://acme.com" so links work everywhere they appear.
+        if (!empty($validated['website'])) {
+            $w = trim($validated['website']);
+            if (!preg_match('#^https?://#i', $w)) {
+                $w = 'https://' . ltrim($w, '/');
+            }
+            $validated['website'] = $w;
+        }
 
         return DB::transaction(function () use ($validated) {
             // 1. Create Organization

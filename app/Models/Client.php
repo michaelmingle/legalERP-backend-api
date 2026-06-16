@@ -28,6 +28,10 @@ class Client extends Model
         'start_date',
         'status',
         'address',
+        'city',
+        'state',
+        'postal_code',
+        'country',
         'assigned_lawyer',
         'document_id',
     ];

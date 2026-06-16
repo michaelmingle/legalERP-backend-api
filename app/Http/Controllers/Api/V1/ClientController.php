@@ -67,6 +67,17 @@ class ClientController extends Controller
                 'assigned_lawyer' => 'nullable|exists:users,id',
             ]);
 
+            // Auto-generate a client number if the frontend didn't supply one.
+            // Format: CL-{org}-{YYYYMM}-{sequence}, e.g. CL-12-202606-0004
+            if (empty($validated['client_number'])) {
+                $seq = Client::where('organization_id', $organizationId)->count() + 1;
+                do {
+                    $candidate = sprintf('CL-%d-%s-%04d', $organizationId, date('Ym'), $seq);
+                    $seq++;
+                } while (Client::where('client_number', $candidate)->exists());
+                $validated['client_number'] = $candidate;
+            }
+
             DB::beginTransaction();
 
             // Create user account for client
